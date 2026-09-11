@@ -11,3 +11,4 @@ jobs:
           echo "commit sha: $GITHUB_SHA"
           echo "pushed by:  $GITHUB_ACTION"
           echo "shanthosh"
+          echo "start the build"
