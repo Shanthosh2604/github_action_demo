@@ -2,8 +2,7 @@ name: 04 - On Push (filtered)
 
 on:
   push:
-    branches:
-      - main
+    
     paths:
       - '**.py'             # ...or any JavaScript file, anywhere in the repo
     
