@@ -1,0 +1,13 @@
+name: first_program
+on: push
+jobs: 
+  push_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: show what trigger is run 
+        run: |
+          echo "Event name: $GITHUB_EVENT_NAME"
+          echo "Branch ref: $GITHUB_REF"
+          echo "commit sha: $GITHUB_SHA"
+          echo "pushed by:  $GITHUB_ACTION"
+          echo "shanthosh"

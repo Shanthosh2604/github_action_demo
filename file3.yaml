@@ -1,0 +1,17 @@
+name: 03 - On Push (filtered)
+
+on:
+  push:
+    # branches: [main]
+
+    paths:
+      - '**.py'  
+      - 'src/**'           # ...or any python file
+    
+
+jobs:
+  filtered-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: This only runs for the branches/paths above
+        run: echo "Relevant change detected on branch ${{ github.ref_name }}"

@@ -1,0 +1,14 @@
+name: first_program
+on: workflow_dispatch
+jobs: 
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: print single line
+        run: echo "Hello, Github Action"
+      - name: print multiple line 
+        run: |
+          echo "Hi"
+          echo "hello"
+          echo "the os is $RUNNER_OS"
+          echo "the repo is: $GITHUB_ACTION"
