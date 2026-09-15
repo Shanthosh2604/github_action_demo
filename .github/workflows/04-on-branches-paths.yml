@@ -1,7 +1,3 @@
-# 04 - Trigger filters: branches, tags, and paths
-# Don't run on EVERY push — only when it actually matters.
-# This saves CI minutes and avoids noisy, irrelevant runs.
-#
 # RULE: use EITHER `branches` OR `branches-ignore` (not both).
 #       Same for `paths`/`paths-ignore` and `tags`/`tags-ignore`.
 
@@ -9,6 +5,8 @@ name: 04 - On Push (filtered)
 
 on:
   push:
+    branches-ignore:
+      - main
     branches:
       - main
       - 'release/**'        # any branch starting with release/  (** = wildcard)

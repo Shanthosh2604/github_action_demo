@@ -1,6 +1,6 @@
 # 05 - Trigger: workflow_dispatch (manual run with inputs)
 # Adds a "Run workflow" button to the Actions tab.
-# Great for deployments, one-off tasks, or letting testers pick options.
+# for deployments, one-off tasks, or letting testers pick options.
 
 name: 05 - Manual Run With Inputs
 

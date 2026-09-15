@@ -1,4 +1,3 @@
-# 07 - Combined trigger example
 # A single workflow can listen to MANY events at once.
 # This is the realistic CI setup: run on pushes to main, on every PR,
 # and allow a manual run when needed.

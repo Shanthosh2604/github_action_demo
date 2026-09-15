@@ -8,7 +8,9 @@
 #               │ │ │ ┌ month (1-12)
 #               │ │ │ │ ┌ day of week (0-6, Sun=0)
 #               * * * * *
-# Tip: build/verify expressions at https://crontab.guru
+
+#schedule will be in utc time not in Indian time zone 
+
 
 name: 06 - Scheduled Run
 
