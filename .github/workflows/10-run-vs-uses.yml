@@ -9,7 +9,6 @@ on: workflow_dispatch
 
 jobs:
 
-  # --- intro job: basic uses + run demo ---
   intro:
     runs-on: ubuntu-latest
     steps:
