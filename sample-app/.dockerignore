@@ -1,0 +1,8 @@
+# Everything listed here is excluded from the build CONTEXT — the tarball
+# Docker uploads before the first instruction runs. Keeping build output and
+# installed packages out of it makes builds faster and stops a stale local
+# node_modules/ from silently overwriting what `npm ci` just installed.
+node_modules/
+dist/
+reports/
+.gitignore

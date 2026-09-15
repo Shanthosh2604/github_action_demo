@@ -1,0 +1,16 @@
+# Keep shell scripts LF-only, even in a Windows working tree.
+#
+# WHY THIS FILE EXISTS: Git on Windows usually runs with core.autocrlf=true,
+# which rewrites LF -> CRLF on checkout. That is harmless for YAML and Markdown,
+# but it breaks any script that runs inside a Linux container: the shebang
+# becomes "#!/bin/sh\r", Linux looks for an interpreter literally named
+# "/bin/sh\r", and Docker reports the missing *interpreter* as
+#
+#     exec /entrypoint.sh: no such file or directory
+#
+# ...which reads like the script is absent when it is sitting right there.
+# `eol=lf` overrides autocrlf for these paths so the copy on disk — the copy you
+# upload to your practice repo — is already LF.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.dockerfile text eol=lf
