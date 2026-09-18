@@ -5,8 +5,6 @@ name: 04 - On Push (filtered)
 
 on:
   push:
-    branches-ignore:
-      - main
     branches:
       - main
       - 'release/**'        # any branch starting with release/  (** = wildcard)

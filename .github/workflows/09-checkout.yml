@@ -23,4 +23,4 @@ jobs:
         uses: actions/checkout@v5      # current major version (Node 24 runtime)
 
       - name: List files AFTER checkout
-        run: ls -la          # now your repo files are present
+        run: ls -la         # now your repo files are present
