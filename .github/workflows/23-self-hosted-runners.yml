@@ -1,0 +1,64 @@
+# 34 - Self-hosted runners: bring your own machine
+#
+# GitHub-hosted runners cover almost everything. You reach for a SELF-HOSTED
+# runner — a machine YOU register and maintain — only when the hosted ones
+# can't do the job:
+#   * special hardware: a GPU, lots of RAM, an ARM board, a specific OS.
+#   * private network access: a database or API reachable only inside your VPC.
+#   * licensed / preinstalled tooling that is expensive to install every run.
+#   * very high volume where per-minute billing gets pricey.
+#
+# HOW YOU GET ONE: Settings -> Actions -> Runners -> New self-hosted runner.
+# GitHub gives you a download + `config.sh` + `run.sh` to run on your box. Once
+# it's connected, you target it by LABEL:
+#
+#     runs-on: [self-hosted, linux, x64, gpu]
+#              └── every label must match; the runner advertises its labels ──┘
+#
+# ⚠️ THE SECURITY WARNING YOU MUST INTERNALISE:
+#    NEVER attach a self-hosted runner to a PUBLIC repository. Anyone can open a
+#    pull request, and its workflow would execute THEIR code on YOUR machine —
+#    inside your network, with whatever that machine can reach. Self-hosted
+#    runners are for private/internal repos only.
+#    Also: hosted runners are destroyed after each job; self-hosted ones are
+#    NOT. State, caches, and malware persist between runs unless you clean up or
+#    run each job in a fresh container.
+#
+# SCALING (a note, not a demo): running one box by hand doesn't scale. Modern
+# setups use RUNNER GROUPS (to control which repos may use which runners) and
+# ephemeral, auto-scaling runners via the Actions Runner Controller (ARC) on
+# Kubernetes, or runner scale sets — a runner is created for one job and thrown
+# away, restoring the "clean machine every time" property.
+#
+# WHAT TO OBSERVE: this file will sit in "Queued" forever UNLESS you have a
+# runner online with matching labels — that waiting state is itself the lesson
+# about how `runs-on` label-matching works. Swap back to `ubuntu-latest` to run
+# it on a hosted runner.
+
+name: 34 - Self-hosted Runners
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  on-my-machine:
+    # Change these labels to match a runner you registered. As written, this
+    # job will wait until a [self-hosted, linux, x64] runner is available.
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show where we are running
+        run: |
+          echo "Runner name : $RUNNER_NAME"
+          echo "Runner OS   : $RUNNER_OS"
+          echo "This is MY hardware — inside my network, with my tools."
+          echo "Unlike a hosted runner, nothing here is wiped after the job."
+
+      - name: Clean up after yourself (self-hosted runners persist!)
+        if: always()
+        run: |
+          echo "On a persistent runner, tidy build output so the next job"
+          echo "starts from a known state (or run jobs inside a container)."
