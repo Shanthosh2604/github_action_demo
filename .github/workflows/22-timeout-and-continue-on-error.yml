@@ -27,7 +27,7 @@
 # WHAT TO OBSERVE: the job goes GREEN overall, but individual steps show a
 # red-with-arrow icon, and the timeout job is cancelled after 1 minute.
 
-name: 33 - Timeouts & continue-on-error
+name: 22 - Timeouts & continue-on-error
 
 on: workflow_dispatch
 

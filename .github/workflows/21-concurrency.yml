@@ -28,7 +28,7 @@
 # WHAT TO OBSERVE: run this from the button, then IMMEDIATELY run it again.
 # The first run flips to "Cancelled" the moment the second starts.
 
-name: 32 - Concurrency
+name: 21 - Concurrency
 
 on:
   workflow_dispatch:

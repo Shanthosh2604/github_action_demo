@@ -35,7 +35,7 @@
 # about how `runs-on` label-matching works. Swap back to `ubuntu-latest` to run
 # it on a hosted runner.
 
-name: 34 - Self-hosted Runners
+name: 23 - Self-hosted Runners
 
 on: workflow_dispatch
 

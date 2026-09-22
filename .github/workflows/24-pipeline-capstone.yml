@@ -33,7 +33,7 @@
 # staging deploys automatically; production sits on "Waiting" until you
 # click Approve; summary runs whatever happened.
 
-name: 35 - CI/CD Pipeline (Capstone)
+name: 34 - CI/CD Pipeline (Capstone)
 
 on:
   push:

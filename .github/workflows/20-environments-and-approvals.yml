@@ -35,7 +35,7 @@
 # "Waiting" badge and a "Review deployments" button. Nothing executes until
 # you click Approve. Meanwhile the Environments page records the deployment.
 
-name: 31 - Environments & Approvals
+name: 20 - Environments & Approvals
 
 on:
   workflow_dispatch:
