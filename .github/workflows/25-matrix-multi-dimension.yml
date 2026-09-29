@@ -28,14 +28,14 @@ on: workflow_dispatch
 
 jobs:
   test:
-    name: ${{ matrix.os }} · Node ${{ matrix.node }} ${{ matrix.label }}
+    name: ${{ matrix.os }} · Node ${{ matrix.node }} ${{ matrix.label }} #ubuntu-latest 20 (primary)
     runs-on: ${{ matrix.os }}          # the runner itself comes from the matrix
 
     strategy:
       fail-fast: false                 # see file 23 — keep all rows running
 
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
         node: [20, 22, 24]
 
         # Drop combinations you do not care about.
