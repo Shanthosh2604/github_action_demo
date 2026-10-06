@@ -1,0 +1,78 @@
+# 37 - CodeQL: static code scanning built into the pipeline
+#
+# CodeQL is GitHub's static-analysis engine. It parses your code into a
+# database and runs security queries against it — SQL injection, path
+# traversal, hard-coded credentials, unsafe deserialisation, and so on. Findings
+# land in the repo's SECURITY tab under "Code scanning alerts", annotated
+# straight onto the offending line and (optionally) onto the pull request.
+#
+# WHY IT LIVES IN A WORKFLOW: scanning on every push/PR means a vulnerability is
+# caught the moment it is introduced, not in an annual pentest. On the default
+# branch you also scan on a SCHEDULE so newly-published query updates re-check
+# old code.
+#
+# 📋 AVAILABILITY: free for PUBLIC repositories. On private repos it needs
+#    GitHub Advanced Security (GHAS). Turn the feature on once under
+#    Settings -> Code security -> Code scanning, or just commit this file.
+#
+# 🔑 THE PERMISSION THAT MATTERS:
+#      security-events: write   -> lets the workflow UPLOAD results to the tab.
+#    Forget it and the analyze step fails with "Resource not accessible by
+#    integration". `contents: read` is needed to check the code out.
+#
+# THE THREE STEPS ARE ALWAYS THE SAME:
+#   1. codeql-action/init      -> build the database (tell it the languages)
+#   2. (build the project)     -> compiled langs need a real build; JS/Python
+#                                 use `autobuild` or nothing
+#   3. codeql-action/analyze   -> run the queries and upload the SARIF results
+#
+# MATRIX BY LANGUAGE: one analysis per language. `javascript-typescript`
+# covers our Node app; add `python`, `java-kotlin`, `go`, etc. as needed.
+#
+# WHAT TO OBSERVE: after it runs, open Security -> Code scanning. A clean repo
+# shows "No alerts". Introduce an obvious bug (e.g. build a shell command from
+# untrusted input) and watch the next run flag it, with the line highlighted.
+
+name: 37 - CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '30 2 * * 1'      # Mondays 02:30 UTC — re-scan with the latest queries
+
+permissions:
+  contents: read
+  security-events: write      # 🔑 required to publish findings
+  # actions: read             # only needed for private repos
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # One job per language. Our sample app is JS.
+        language: ['javascript-typescript']
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          # queries: security-extended   # opt into a broader, noisier query set
+
+      # Compiled languages (Java, C++, Go) need their real build here, e.g.
+      #   - uses: github/codeql-action/autobuild@v4
+      # JavaScript/TypeScript and Python need no build step at all.
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: '/language:${{ matrix.language }}'

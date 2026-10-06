@@ -1,0 +1,95 @@
+# 36 - Supply-chain security: PIN ACTIONS TO A FULL COMMIT SHA
+#
+# When you write `uses: actions/checkout@v5`, `@v5` is a TAG — and a tag is a
+# movable pointer. Whoever controls the repo can re-point `v5` at any commit,
+# at any time. Every workflow in the world that trusts `@v5` then runs that
+# new code automatically, with your secrets and your GITHUB_TOKEN.
+#
+# THIS IS NOT HYPOTHETICAL. In March 2025 the popular `tj-actions/changed-files`
+# action was compromised: an attacker retro-actively moved its version tags to
+# a malicious commit that dumped CI secrets into the build logs. Tens of
+# thousands of repos that pinned to a tag were exposed in hours. Repos that
+# pinned to a full SHA were untouched.
+#
+# THE FIX: pin third-party actions to a FULL 40-character commit SHA. A SHA is
+# immutable — it names one exact commit that can never be swapped.
+#
+#     - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+#                              └── the 40-char SHA ──────────────────┘   └ human note
+#
+#   Keep the tag as a trailing COMMENT so a human (and Dependabot) can still
+#   read which version it is. GitHub does NOT verify the comment — the SHA is
+#   what runs.
+#
+# "BUT NOW I NEVER GET UPDATES." That is what DEPENDABOT is for. Add
+# .github/dependabot.yml (shown at the bottom) and Dependabot opens a PR that
+# bumps the SHA *and* the comment whenever a new release ships. You review the
+# diff and merge — updates stay deliberate instead of automatic.
+#
+# HOW MUCH TO PIN:
+#   * THIRD-PARTY actions (anyone not `actions/*` or your own org) -> ALWAYS SHA.
+#   * `actions/*` (GitHub's own, e.g. checkout, setup-node) -> a major tag is
+#     widely considered acceptable; SHA-pinning them is stricter and fine too.
+#   * Your OWN reusable workflows in the same repo (`./.github/...`) -> they run
+#     at the current commit already, so there is nothing to pin.
+#
+# IMMUTABLE ACTIONS & ORG POLICY (the platform is catching up):
+#   * GitHub now publishes many actions as IMMUTABLE releases (backed by a
+#     package whose tag cannot be moved) — a SHA and a tag become equivalent.
+#   * Org / enterprise admins can turn on "require actions to be pinned to a
+#     full-length commit SHA", which fails any workflow using a bare tag.
+#
+# WHAT TO OBSERVE: this workflow runs normally — the lesson is in how the
+# `uses:` lines are written, not in the output. Compare the pinned job to the
+# tag-only job and note that both do the same thing; only one is tamper-proof.
+
+name: 36 - SHA Pinning
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  # ── The safe way: every third-party action pinned to a SHA ───────────────
+  pinned:
+    name: Pinned to SHA (tamper-proof)
+    runs-on: ubuntu-latest
+    steps:
+      # NOTE: the SHAs below are EXAMPLES. Get the real current SHA from the
+      # action's Releases page (click a release -> the commit -> copy the full
+      # hash), or just let Dependabot fill them in for you.
+      - name: Checkout, pinned
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - name: Setup Node, pinned
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903  # v6.0.0
+        with:
+          node-version: '20'
+
+      - run: echo "Every action above is nailed to one immutable commit."
+
+  # ── The risky way: bare tags. Runs fine — until a tag gets moved ─────────
+  tag-only:
+    name: Tag only (works, but trusts a movable pointer)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          echo "This job trusts whatever commit '@v5' points at TODAY."
+          echo "For GitHub's own actions that is a reasonable risk;"
+          echo "for a random third-party action it is how CI gets popped."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Companion file — .github/dependabot.yml — keeps the pins fresh automatically:
+#
+#   version: 2
+#   updates:
+#     - package-ecosystem: "github-actions"
+#       directory: "/"                 # scans all workflows under .github/workflows
+#       schedule:
+#         interval: "weekly"
+#       # Dependabot rewrites both the SHA and the "# vX.Y.Z" comment for you.
+#
+# Commit that file and Dependabot raises a PR the next time any action releases.
+# ─────────────────────────────────────────────────────────────────────────────
