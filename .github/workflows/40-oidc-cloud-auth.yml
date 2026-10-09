@@ -1,0 +1,99 @@
+# 40 - OIDC: authenticate to the cloud with NO long-lived secrets
+#
+# THE PROBLEM WITH STORED CLOUD KEYS: the usual way to deploy is to paste an
+# AWS access key (or a GCP service-account JSON, or an Azure client secret)
+# into repo secrets. That key is long-lived, powerful, and copied into your CI.
+# If it leaks — via a log, a compromised action, a poisoned PR — an attacker
+# has standing access to your cloud until someone notices and rotates it.
+#
+# THE FIX — OpenID Connect (OIDC): instead of storing a key, GitHub mints a
+# short-lived, cryptographically-signed JSON token at runtime that PROVES
+# "this is workflow X, in repo Y, on branch Z". Your cloud is configured to
+# TRUST GitHub's OIDC issuer and swap that proof for temporary credentials that
+# expire in minutes. Nothing long-lived is ever stored. A leaked log is
+# worthless an hour later.
+#
+#   ┌─────────────┐  1. request OIDC token   ┌──────────────────────┐
+#   │ GitHub run  │ ───────────────────────> │ GitHub OIDC provider │
+#   └─────────────┘                          └──────────────────────┘
+#         │  2. present token + assume role
+#         v
+#   ┌───────────────────────┐  3. verify issuer + `sub` claim, return
+#   │ AWS STS (or GCP/Azure)│      short-lived creds (~1 hour)
+#   └───────────────────────┘
+#
+# 🔑 THE ONE PERMISSION THAT UNLOCKS IT:
+#      id-token: write   -> lets the job REQUEST an OIDC token.
+#    Without it the cloud-login step fails with "Unable to get ACTIONS_ID_TOKEN
+#    _REQUEST_URL". It is NOT granted by default, ever — you add it explicitly.
+#
+# 🔑 SCOPING TRUST WITH THE `sub` CLAIM (this is the security):
+#    On the cloud side you don't trust "any GitHub repo" — you trust a specific
+#    subject, e.g.
+#      repo:my-org/my-repo:ref:refs/heads/main          (only main)
+#      repo:my-org/my-repo:environment:production        (only the prod env)
+#      repo:my-org/my-repo:pull_request                  (any PR — usually DON'T)
+#    Scope it as tightly as possible so a token from a random branch or fork
+#    can't assume your production role.
+#
+# 📋 ONE-TIME CLOUD SETUP (done in AWS, not here):
+#   1. Add GitHub as an OIDC identity provider:
+#        URL   https://token.actions.githubusercontent.com
+#        aud   sts.amazonaws.com
+#   2. Create an IAM role whose trust policy allows that provider AND restricts
+#      the `sub` claim to your repo + branch/environment (see above).
+#   3. Put the role ARN in a repo VARIABLE (it is not secret): vars.AWS_ROLE_ARN
+#
+# WHAT TO OBSERVE: the login step exchanges the token for temporary creds and
+# `aws sts get-caller-identity` prints the assumed-role ARN — with no access
+# key anywhere in the repo. (Azure and GCP equivalents are noted at the bottom.)
+
+name: 40 - OIDC Cloud Auth
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# Least privilege — but we DO need id-token to request the OIDC token.
+permissions:
+  contents: read
+  id-token: write            # 🔑 the line that makes OIDC possible
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    # Scope the cloud trust to this environment's `sub` claim for extra safety.
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure AWS credentials via OIDC (no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}   # a VARIABLE, not a secret
+          aws-region: us-east-1
+          # No aws-access-key-id / aws-secret-access-key anywhere. That is the point.
+
+      - name: Prove who we are
+        run: |
+          echo "These credentials are temporary and expire within the hour:"
+          aws sts get-caller-identity
+
+      - name: Deploy
+        run: echo "Deploying with short-lived, scoped credentials. Nothing to leak."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OTHER CLOUDS — same `id-token: write`, different login action:
+#
+#   Azure:  uses: azure/login@v2
+#           with: { client-id, tenant-id, subscription-id }   # federated creds
+#
+#   GCP:    uses: google-github-actions/auth@v2
+#           with: { workload_identity_provider, service_account }
+#
+# The pattern never changes: request an OIDC token -> the provider trusts your
+# repo's `sub` claim -> you receive short-lived credentials. No static secret.
+# ─────────────────────────────────────────────────────────────────────────────

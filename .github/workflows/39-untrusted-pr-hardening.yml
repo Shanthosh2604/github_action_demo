@@ -1,0 +1,97 @@
+# 39 - Handling UNTRUSTED pull requests safely (poisoned pipeline execution)
+#
+# THE TRAP: `pull_request` vs `pull_request_target`.
+#
+#   pull_request         -> runs the workflow FROM THE PR's code, with a
+#                           read-only token and NO access to your secrets when
+#                           the PR comes from a fork. Safe by design, but it
+#                           can't do things that need secrets (e.g. label a PR).
+#
+#   pull_request_target  -> runs the workflow FROM THE BASE branch (your
+#                           trusted code) but with FULL secrets and a
+#                           read/WRITE token — while a fork author controls the
+#                           PR contents. This combination is the danger.
+#
+# THE ATTACK (poisoned pipeline execution): a `pull_request_target` workflow
+# that CHECKS OUT THE PR HEAD and then runs it — `npm ci`, `npm test`, a build
+# script — is executing a stranger's code with your secrets in the environment.
+# The attacker just edits a test, or a `postinstall` script, to print
+# ${{ secrets.* }} or exfiltrate GITHUB_TOKEN. This is the #1 Actions
+# misconfiguration found in the wild.
+#
+# THE RULES THAT KEEP YOU SAFE:
+#   1. Prefer plain `pull_request`. Only reach for `pull_request_target` when
+#      you genuinely need secrets/write on fork PRs (labeling, size bots).
+#   2. With `pull_request_target`, do NOT check out and RUN the PR's code in the
+#      same job that holds secrets. If you must build the PR, do it in a
+#      SEPARATE `pull_request` job with no secrets.
+#   3. Never interpolate untrusted text (PR title/body/branch) straight into a
+#      `run:` script — that is a shell-injection vector. Pass it through `env:`
+#      and reference the variable, so the shell treats it as data, not code.
+#   4. Keep `permissions:` least-privilege even here.
+#   5. Require approval to run workflows on PRs from first-time contributors
+#      (Settings -> Actions -> "Fork pull request workflows from outside
+#      collaborators").
+#
+# WHAT TO OBSERVE: the two jobs below show the split. `safe-untrusted-build`
+# uses `pull_request` and never sees secrets. `trusted-metadata` uses
+# `pull_request_target`, holds the write token, and deliberately does NOT run
+# any PR code — it only reads metadata.
+
+name: 39 - Untrusted PR Hardening
+
+# Demonstrates BOTH triggers in one file for teaching. In real life you would
+# usually split these into two files.
+on:
+  pull_request:
+  pull_request_target:
+    types: [opened, synchronize, labeled]
+
+# Global least-privilege default.
+permissions:
+  contents: read
+
+jobs:
+  # ── SAFE: build/test the PR's code, but with no secrets and no write token ─
+  safe-untrusted-build:
+    name: Build fork code (no secrets)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: sample-app
+    steps:
+      - uses: actions/checkout@v5          # checks out the PR head — fine here,
+                                           # because this job has no secrets.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'sample-app/package-lock.json'
+      - run: npm ci
+      - run: npm test
+      - run: echo "Ran a stranger's code — but there was nothing here to steal."
+
+  # ── TRUSTED: has secrets/write, so it must NOT run any PR code ─────────────
+  trusted-metadata:
+    name: Label the PR (secrets, but no PR code)
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write        # elevate ONLY what this task needs
+    steps:
+      # ⚠️ No `actions/checkout` of the PR head here. We touch metadata only.
+      - name: Comment based on PR title (injection-safe)
+        env:
+          # Untrusted input goes through env, never inlined into the script.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Title (as data, not code): $PR_TITLE"
+          if printf '%s' "$PR_TITLE" | grep -qiE '\[wip\]'; then
+            gh pr comment "$PR_NUM" --body "Detected WIP — will wait for it to be marked ready." \
+              --repo "${{ github.repository }}"
+          fi

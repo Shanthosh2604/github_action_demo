@@ -1,0 +1,47 @@
+# A JAVASCRIPT ACTION — runs real logic on the runner via Node.js.
+#
+# 📁 WHERE THIS GOES IN YOUR PRACTICE REPO:
+#      .github/actions/greet-js/action.yml   (this metadata file)
+#      .github/actions/greet-js/index.js     (the code it runs)
+#
+# WHY A JS ACTION (vs composite / reusable workflow): a composite action can
+# only glue together shell + other actions. When you need REAL LOGIC — parse
+# JSON, call an API, do control flow — you write JavaScript. It runs directly on
+# the runner (Linux/Windows/macOS) with no container, so it starts instantly.
+#
+# THE THREE RULES:
+#   * `runs.using` is a Node version: `node20` (current). NOT `composite`.
+#   * `runs.main` points at the JS entry file.
+#   * The JS reads inputs from environment variables named INPUT_<NAME>
+#     (uppercased, spaces -> underscores) and writes outputs by appending to the
+#     file named in $GITHUB_OUTPUT. The official `@actions/core` toolkit wraps
+#     both, but this action uses ONLY Node built-ins so there is nothing to
+#     `npm install` — keeping the course's "nothing to generate" promise.
+#
+# ⚠️ THE PRODUCTION CAVEAT: a real JS action's dependencies must be COMMITTED
+#    (the runner does not run `npm install` for you). Teams bundle everything
+#    into one file with `@vercel/ncc` and commit `dist/index.js`. We dodge that
+#    here by having zero dependencies.
+
+name: 'Greet (JavaScript)'
+description: 'A tiny JavaScript action: greets a name and returns the time.'
+
+branding:
+  icon: 'smile'
+  color: 'blue'
+
+inputs:
+  who:
+    description: 'Name to greet'
+    required: false
+    default: 'world'
+
+outputs:
+  greeting:
+    description: 'The greeting that was printed'
+  time:
+    description: 'ISO timestamp when the action ran'
+
+runs:
+  using: 'node20'         # a Node runtime, not `composite`
+  main: 'index.js'

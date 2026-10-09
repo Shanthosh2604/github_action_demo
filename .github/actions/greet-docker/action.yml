@@ -1,0 +1,45 @@
+# A DOCKER CONTAINER ACTION — runs your logic inside a container you define.
+#
+# 📁 WHERE THIS GOES IN YOUR PRACTICE REPO:
+#      .github/actions/greet-docker/action.yml
+#      .github/actions/greet-docker/Dockerfile
+#      .github/actions/greet-docker/entrypoint.sh
+#
+# JS ACTION vs DOCKER ACTION — when to reach for each:
+#   JS action     -> fast (no image build), runs on Linux/Windows/macOS, but you
+#                    are limited to what Node can do on the runner.
+#   Docker action -> you control the ENTIRE environment (any base image, any
+#                    language, any system package). Slower — the image is built
+#                    or pulled first — and LINUX RUNNERS ONLY. Perfect when your
+#                    tool isn't JS or needs specific system dependencies.
+#
+# THE THREE RULES:
+#   * `runs.using: docker`.
+#   * `runs.image` is either `Dockerfile` (built on the fly) or a prebuilt
+#     `docker://ghcr.io/owner/img:tag` (faster, no build each run).
+#   * Inputs are passed to the container as env vars named INPUT_<NAME>, and
+#     `runs.args` forwards them as positional arguments to the entrypoint.
+#   * Outputs use the same $GITHUB_OUTPUT file, bind-mounted into the container.
+
+name: 'Greet (Docker)'
+description: 'A Docker container action that greets a name from inside a container.'
+
+branding:
+  icon: 'box'
+  color: 'purple'
+
+inputs:
+  who:
+    description: 'Name to greet'
+    required: false
+    default: 'world'
+
+outputs:
+  greeting:
+    description: 'The greeting that was printed'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'          # build this folder's Dockerfile at run time
+  args:
+    - ${{ inputs.who }}        # forwarded as $1 to entrypoint.sh

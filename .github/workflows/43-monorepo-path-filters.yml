@@ -1,0 +1,96 @@
+# 43 - Monorepo strategies: only build what actually changed
+#
+# In a monorepo (many apps/services in one repo) you do NOT want to rebuild and
+# redeploy EVERYTHING on every push. If only `sample-app/` changed, only its
+# pipeline should run. Two levels of "change detection", from coarse to fine:
+#
+# LEVEL 1 — workflow-level `paths` (you already met this earlier):
+#     on:
+#       push:
+#         paths: ['sample-app/**']
+#   Skips the WHOLE workflow unless a matching file changed. Simple, but it is
+#   all-or-nothing — no good when one workflow orchestrates several services.
+#
+# LEVEL 2 — per-PATH detection INSIDE one workflow (this file):
+#   A first job diffs the changed files and sets a boolean OUTPUT per component.
+#   Later jobs gate on those outputs with `if:`. Now one workflow builds only
+#   the services that changed, in parallel, and skips the rest.
+#
+#   The community standard for the detection step is `dorny/paths-filter`,
+#   which compares the PR/push against the base and emits one output per filter.
+#
+# ⚠️ THE GOTCHA: a downstream job with `if: needs.changes.outputs.app == 'true'`
+#    is SKIPPED when the file didn't change — and a skipped job counts as
+#    "success" for anything that `needs` it. If you use these as REQUIRED status
+#    checks for branch protection, a skipped-but-required check can block merges;
+#    the usual fix is a final "all-green" aggregation job.
+#
+# WHAT TO OBSERVE: change a file under `sample-app/` and only the app job runs;
+# change a file under `docs/` and only the docs job runs; the untouched one is
+# skipped (grey).
+
+name: 43 - Monorepo Path Filters
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ── 1. Detect which parts of the monorepo changed ────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'sample-app/**'
+            docs:
+              - 'docs/**'
+              - '**/*.md'
+
+  # ── 2. Build the app ONLY if app files changed ───────────────────────────
+  build-app:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'sample-app/package-lock.json'
+      - run: npm ci
+      - run: npm test
+
+  # ── 3. Build the docs ONLY if docs/markdown changed ──────────────────────
+  build-docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: echo "Docs changed — rebuild the docs site here."
+
+  # ── 4. One green check to protect the branch on, regardless of skips ─────
+  all-green:
+    needs: [build-app, build-docs]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Succeed unless a job that actually ran failed
+        if: contains(needs.*.result, 'failure')
+        run: exit 1

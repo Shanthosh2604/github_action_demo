@@ -1,0 +1,44 @@
+# 45 - USING a JavaScript action
+# Pairs with day-05/actions/greet-js/ (action.yml + index.js).
+#
+# 📋 SETUP — copy TWO things into your practice repo:
+#      .github/workflows/45-javascript-action-demo.yml   (this file)
+#      .github/actions/greet-js/                          (the action folder)
+#
+# ⚠️ THE SAME LOCAL-ACTION RULE AS COMPOSITE ACTIONS: a local action is a file
+#    in your repo, so `actions/checkout` MUST run before `uses: ./...`. Skip it
+#    and the runner can't find action.yml.
+#
+# WHAT THIS SHOWS: a JS action consumes typed inputs (`with:`) and returns
+# outputs (`steps.<id>.outputs.*`) just like a Marketplace action — because
+# under the hood that is exactly what Marketplace JS actions are.
+#
+# WHAT TO OBSERVE: the greet step prints "Hello, ..." and the next step reads
+# back the `greeting` and `time` outputs the JS code emitted.
+
+name: 45 - JavaScript Action
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  use-the-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5          # MANDATORY before a local action
+
+      - name: Run the JS action
+        id: greet
+        uses: ./.github/actions/greet-js   # a PATH, no @version (current commit)
+        with:
+          who: 'LearnWithMithran'
+
+      - name: Read the action's outputs
+        run: |
+          echo "greeting output = ${{ steps.greet.outputs.greeting }}"
+          echo "time output     = ${{ steps.greet.outputs.time }}"
+
+      - name: Default input works too
+        uses: ./.github/actions/greet-js   # no `with:` -> greets 'world'

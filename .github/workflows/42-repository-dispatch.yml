@@ -1,0 +1,65 @@
+# 42 - repository_dispatch: trigger a workflow from OUTSIDE GitHub
+#
+# Every trigger so far (push, PR, schedule, the manual button) starts INSIDE
+# GitHub. `repository_dispatch` lets an EXTERNAL system start a workflow by
+# calling the GitHub API — a webhook from another service, a deploy button in
+# your internal dashboard, a message from a different repo or org, a chatbot.
+#
+# HOW IT FIRES: something POSTs to the repo's dispatches endpoint with a
+# personal access token (or an app token) that has `contents: write`:
+#
+#   export GH_PAT="<your-pat-here>"   # a PAT with repo write access
+#   # ^ NEVER paste a real token into a file, a commit, a screen recording, or
+#   #   a chat. Read it from your shell env or a secret manager. GitHub scans
+#   #   public pushes for token patterns and auto-revokes what it finds — but
+#   #   only after it has already been published.
+#   curl -X POST \
+#     -H "Authorization: Bearer $GH_PAT" \
+#     -H "Accept: application/vnd.github+json" \
+#     https://api.github.com/repos/OWNER/REPO/dispatches \
+#     -d '{"event_type":"deploy-request",
+#          "client_payload":{"environment":"staging","version":"1.4.2"}}'
+#
+#   * event_type     -> an arbitrary label YOU choose; match it with `types:`.
+#   * client_payload -> any JSON you want to pass in, readable in the workflow
+#                       via ${{ github.event.client_payload.* }}.
+#
+# ⚠️ NOTES:
+#   * A `repository_dispatch` workflow only runs from the DEFAULT branch.
+#   * `types:` filters which event_types you react to, so one repo can expose
+#     several external hooks (deploy-request, run-tests, rebuild-docs...).
+#   * Treat `client_payload` as UNTRUSTED input — pass it via `env:`, never
+#     inline it into a shell command (injection, same as file 39).
+#   * Sibling concept: `workflow_dispatch` is the manual UI button;
+#     `repository_dispatch` is its API-driven, machine-to-machine cousin.
+#
+# WHAT TO OBSERVE: you can't click this one in the UI. Fire the curl above (with
+# a PAT) and watch the run appear, carrying whatever you put in client_payload.
+---
+name: 42 - Repository Dispatch
+
+on:
+  repository_dispatch:
+    types: [deploy-request, run-tests]    # the external event_type labels we accept
+
+permissions:
+  contents: read
+
+jobs:
+  handle-external-event:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show what the external caller sent
+        env:
+          # client_payload is untrusted — read it through env, not inline.
+          EVENT_TYPE: ${{ github.event.action }}
+          ENVIRONMENT: ${{ github.event.client_payload.environment }}
+          VERSION: ${{ github.event.client_payload.version }}
+        run: |
+          echo "Triggered externally by event_type: $EVENT_TYPE"
+          echo "Requested environment : $ENVIRONMENT"
+          echo "Requested version     : $VERSION"
+
+      - name: Act on it
+        if: github.event.action == 'deploy-request'
+        run: echo "An external system asked us to deploy — proceeding."

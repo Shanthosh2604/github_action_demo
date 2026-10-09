@@ -1,0 +1,102 @@
+# 44 - Build a Docker image and push it to GHCR
+#
+# GHCR = GitHub Container Registry (ghcr.io), the container registry built into
+# GitHub. Your workflow can build a Docker image and publish it to
+# ghcr.io/OWNER/IMAGE without any external registry account or stored password —
+# it authenticates with the automatic GITHUB_TOKEN.
+#
+# 🔑 THE PERMISSION: `packages: write`. GHCR is a "package", so pushing needs
+#    this scope. Least-privilege still applies: read at the top, elevate only
+#    the publishing job. `contents: read` is needed to check out the code;
+#    `id-token: write` is added when you also want build PROVENANCE/attestations.
+#
+# THE FOUR ACTIONS THAT DO THE WORK:
+#   docker/setup-buildx-action -> swap the runner's plain `docker` builder for a
+#                              real BuildKit builder (the `docker-container`
+#                              driver). Required for cache export — see below.
+#   docker/login-action     -> log in to ghcr.io using ${{ github.actor }} +
+#                              the GITHUB_TOKEN. No PAT, no stored secret.
+#   docker/metadata-action  -> generate smart TAGS and labels from git context
+#                              (branch, semver tag, sha) so you don't hand-write
+#                              them. This is the piece people skip and regret.
+#   docker/build-push-action -> build the Dockerfile and push in one step, with
+#                              layer caching via GitHub Actions cache.
+#
+# ⚠️ THE ERROR YOU'LL HIT IF YOU SKIP setup-buildx-action:
+#      ERROR: failed to solve: Cache export is not supported for the docker driver.
+#      Switch to a different driver, or turn on the containerd image store...
+#      Learn more at https://docs.docker.com/go/build-cache-backends/
+#      buildx failed with: ...
+#    The default builder on the runner is the `docker` driver: it can build and
+#    push fine, but it CANNOT export a cache, so the run dies the instant it
+#    reaches `cache-to: type=gha`. Nothing is wrong with your Dockerfile — the
+#    build never gets that far. setup-buildx-action fixes it (and installs a
+#    current buildx, which the GHA cache backend also needs).
+#
+# TAGGING, DONE RIGHT: `metadata-action` turns `v1.2.3` into `1.2.3`, `1.2`,
+# `1`, and `latest`; a branch push into `main`; every push into a `sha-abc123`
+# tag. Consumers pin to whichever precision they need.
+#
+# 📋 SETUP: this needs a Dockerfile — `sample-app/Dockerfile` ships with the
+#    course, so copying the `sample-app/` folder is the whole setup. Read it:
+#    it is short and every line is commented. Package visibility
+#    (public/private) is controlled under the repo's Packages settings after
+#    the first push.
+#
+# WHAT TO OBSERVE: after a successful run, open the repo's "Packages" section —
+# your image is listed with all the generated tags, pullable with
+#   docker pull ghcr.io/OWNER/REPO:latest
+
+name: 44 - Docker Build & Push to GHCR
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write            # 🔑 required to push to GHCR
+  # id-token: write          # add for signed build provenance / attestations
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}    # ghcr.io/owner/repo
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4   # 🔑 without this, `cache-to` fails
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}     # the automatic token — no PAT
+
+      - name: Derive tags & labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: ./sample-app          # where the Dockerfile lives
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha           # reuse layers across runs
+          cache-to: type=gha,mode=max

@@ -1,0 +1,75 @@
+# 41 - workflow_run: chain one workflow off another
+#
+# `needs` orders JOBS inside ONE workflow. `workflow_run` orders whole
+# WORKFLOWS: "when workflow A finishes, run workflow B." Use it when the two
+# pieces have to stay separate files but still form a sequence — for example a
+# CI workflow that builds, and a separate Deploy workflow that should fire only
+# after CI succeeds on `main`.
+#
+# THE THREE THINGS THAT TRIP PEOPLE UP:
+#
+#   1. It watches by NAME. `workflows: ["36 - CodeQL"]` matches the `name:` of
+#      the other workflow, not its filename. Rename the other file's `name:`
+#      and this silently stops triggering.
+#
+#   2. The trigger fires on EVERY completion — success AND failure. You must
+#      gate on the conclusion yourself:
+#        if: github.event.workflow_run.conclusion == 'success'
+#
+#   3. It runs from the DEFAULT BRANCH. A `workflow_run` workflow always uses
+#      the version of itself on the default branch, and runs with a token that
+#      (unlike a fork's `pull_request`) CAN have write access. That's powerful —
+#      and the reason you must treat any artifacts/data from the upstream run as
+#      untrusted input (same poisoned-pipeline caution as file 39).
+#
+# GETTING DATA ACROSS: the downstream run does not automatically have the
+# upstream run's files. You fetch them with `actions/download-artifact` using
+# `run-id: github.event.workflow_run.id` (and a github-token), or read outputs
+# the upstream job exposed.
+#
+# WHAT TO OBSERVE: trigger the upstream workflow (e.g. run "36 - SHA Pinning").
+# When it completes on the default branch, THIS workflow starts on its own and
+# reports the upstream conclusion.
+
+name: 41 - Workflow Run Chaining
+
+on:
+  workflow_run:
+    workflows: ["36 - SHA Pinning"]    # the upstream workflow's `name:`
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read                        # to read the upstream run / its artifacts
+
+jobs:
+  after-upstream:
+    runs-on: ubuntu-latest
+
+    # Gate on success — the trigger fires even when the upstream FAILED.
+    if: github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Report what triggered us
+        run: |
+          echo "Upstream workflow : ${{ github.event.workflow_run.name }}"
+          echo "Upstream run #     : ${{ github.event.workflow_run.run_number }}"
+          echo "Conclusion         : ${{ github.event.workflow_run.conclusion }}"
+          echo "Head branch        : ${{ github.event.workflow_run.head_branch }}"
+
+      # To pull artifacts the upstream run produced:
+      # - uses: actions/download-artifact@v8
+      #   with:
+      #     run-id: ${{ github.event.workflow_run.id }}
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     pattern: '*'
+
+      - name: Do the follow-up work
+        run: echo "CI passed on main — this is where a deploy would kick off."
+
+  note-failure:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - run: echo "Upstream failed — skipping the follow-up, could alert here."
