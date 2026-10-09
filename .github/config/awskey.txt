@@ -1,3 +1,0 @@
-[default]
-aws_access_key_id = AKIA-Z7QW3MNPLXK2TRVD
-aws_secret_access_key = wJalrXUtnFEMI2K7-MDENG3PxRfiCYZXMPLZKEYPZ
